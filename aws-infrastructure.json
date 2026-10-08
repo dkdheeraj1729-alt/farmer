@@ -1,0 +1,86 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "AWS Cloud Infrastructure for Farmer Connect Portal (S3, CloudFront, Cognito, DynamoDB, SNS)",
+  "Resources": {
+    "FarmerConnectS3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": "farmer-connect-portal-frontend",
+        "WebsiteConfiguration": {
+          "IndexDocument": "index.html",
+          "ErrorDocument": "index.html"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": false,
+          "BlockPublicPolicy": false,
+          "IgnorePublicAcls": false,
+          "RestrictPublicBuckets": false
+        }
+      }
+    },
+    "FarmerConnectCloudFront": {
+      "Type": "AWS::CloudFront::Distribution",
+      "Properties": {
+        "DistributionConfig": {
+          "Enabled": true,
+          "DefaultRootObject": "index.html",
+          "Origins": [
+            {
+              "Id": "S3Origin",
+              "DomainName": { "Fn::GetAtt": ["FarmerConnectS3Bucket", "RegionalDomainName"] },
+              "CustomOriginConfig": {
+                "HTTPPort": 80,
+                "HTTPSPort": 443,
+                "OriginProtocolPolicy": "http-only"
+              }
+            }
+          ],
+          "DefaultCacheBehavior": {
+            "TargetOriginId": "S3Origin",
+            "ViewerProtocolPolicy": "redirect-to-https",
+            "AllowedMethods": ["GET", "HEAD", "OPTIONS"],
+            "CachedMethods": ["GET", "HEAD"],
+            "ForwardedValues": {
+              "QueryString": false,
+              "Cookies": { "Forward": "none" }
+            }
+          }
+        }
+      }
+    },
+    "CognitoUserPool": {
+      "Type": "AWS::Cognito::UserPool",
+      "Properties": {
+        "UserPoolName": "FarmerConnectUserPool",
+        "UsernameAttributes": ["email", "phone_number"],
+        "AutoVerifiedAttributes": ["phone_number"]
+      }
+    },
+    "DynamoDBMarketplaceTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": "MarketplaceListings",
+        "AttributeDefinitions": [
+          { "AttributeName": "listingId", "AttributeType": "S" }
+        ],
+        "KeySchema": [
+          { "AttributeName": "listingId", "KeyType": "HASH" }
+        ],
+        "BillingMode": "PAY_PER_REQUEST"
+      }
+    },
+    "SNSServiceTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": "FarmerConnectWeatherAndPriceAlerts"
+      }
+    }
+  },
+  "Outputs": {
+    "CloudFrontURL": {
+      "Description": "Live CloudFront CDN URL for Farmer Connect Portal",
+      "Value": { "Fn::GetAtt": ["FarmerConnectCloudFront", "DomainName"] }
+    }
+  }
+}
